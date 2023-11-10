@@ -1,6 +1,6 @@
 const keys = require('./keys');
-const { Pool } = require('pg');
 
+// Express App Setup
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -10,18 +10,21 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Postgres Client Setup
+const { Pool } = require('pg');
 const pgClient = new Pool({
   user: keys.pgUser,
   host: keys.pgHost,
   database: keys.pgDatabase,
   password: keys.pgPassword,
   port: keys.pgPort,
-  ssl: keys.pgSSLEnabled ? { rejectUnauthorized: false } : false,
+  ssl: { 
+    rejectUnauthorized: false 
+  }
 });
 
 pgClient.on('connect', (client) => {
   client
-    .query('CREATE TABLE IF NOT EXISTS "values" (number INT)')
+    .query('CREATE TABLE IF NOT EXISTS values (number INT)')
     .catch((err) => console.error(err));
 });
 
@@ -41,13 +44,9 @@ app.get('/', (req, res) => {
 });
 
 app.get('/values/all', async (req, res) => {
-  try {
-    const values = await pgClient.query('SELECT * FROM "values"');
-    res.send(values.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Internal Server Error');
-  }
+  const values = await pgClient.query('SELECT * from values');
+
+  res.send(values.rows);
 });
 
 app.get('/values/current', async (req, res) => {
@@ -65,17 +64,11 @@ app.post('/values', async (req, res) => {
 
   redisClient.hset('values', index, 'Nothing yet!');
   redisPublisher.publish('insert', index);
+  pgClient.query('INSERT INTO values(number) VALUES($1)', [index]);
 
-  try {
-    await pgClient.query('INSERT INTO "values"(number) VALUES($1)', [index]);
-    res.send({ working: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Internal Server Error');
-  }
+  res.send({ working: true });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(5000, (err) => {
+  console.log('Listening');
 });
